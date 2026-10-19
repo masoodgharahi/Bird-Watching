@@ -1,34 +1,56 @@
 let birdsData = [];
 let currentBirdId = null;
 
-// 1. Load Data
+// 1. Load Data (ضدخطا و هوشمند)
 async function init() {
     try {
-        const res = await fetch('birds_clean.json'); 
+        // ابتدا سعی می‌کند فایل تمیز شده را بخواند، اگر نبود فایل اصلی را می‌خواند
+        let res = await fetch('birds_clean.json');
+        if (!res.ok) {
+            res = await fetch('birds.json');
+        }
+        
+        if (!res.ok) {
+            throw new Error("File not found");
+        }
+
         birdsData = await res.json();
+        
+        // اطمینان از اینکه داده‌ها به صورت آرایه هستند
+        if (!Array.isArray(birdsData)) {
+            throw new Error("Data is not an array");
+        }
+
         renderBirdList(birdsData);
     } catch (err) {
-        console.error("Error loading birds.json", err);
-        document.getElementById('bird-list').innerHTML = "<p style='padding:20px; text-align:center;'>خطا در بارگذاری فایل پرندگان. لطفاً فایل birds_clean.json را در کنار این فایل قرار دهید.</p>";
+        console.error("Error loading birds data:", err);
+        document.getElementById('bird-list').innerHTML = 
+            "<p style='padding:20px; text-align:center; color:red;'>خطا در بارگذاری فایل پرندگان.<br>لطفاً مطمئن شوید فایل birds_clean.json یا birds.json در کنار این فایل قرار دارد.</p>";
     }
 }
 
-// 2. Render List
+// 2. Render List (کاملاً ایمن در برابر داده‌های ناقص)
 function renderBirdList(birds) {
     const list = document.getElementById('bird-list');
     list.innerHTML = '';
+    
     birds.forEach(bird => {
-        // Handle potential trailing spaces in keys from the raw JSON
-        const id = (bird.id || bird['id ']).trim();
-        const nameFa = (bird.nameFa || bird['nameFa ']).trim();
-        const sciName = (bird.scientificName || bird['scientificName ']).trim();
-        const imgUrl = (bird.imageUrl || bird['imageUrl ']).trim();
+        if (!bird) return; // رد کردن آیتم‌های خالی یا نامعتبر
+        
+        // استخراج ایمن داده‌ها (اگر وجود نداشت، رشته خالی برمی‌گرداند تا خطای trim رخ ندهد)
+        const id = String(bird.id || bird['id '] || '').trim();
+        const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
+        const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
+        const imgUrl = String(bird.imageUrl || bird['imageUrl '] || '').trim();
 
         const card = document.createElement('div');
         card.className = 'bird-card';
         card.onclick = () => openBirdDetail(id);
+        
+        const displayImg = imgUrl || 'https://via.placeholder.com/150?text=No+Image';
+
         card.innerHTML = `
-            <img src="${imgUrl}" alt="${nameFa}" onerror="this.src='https://via.placeholder.com/150?text=No+Image'">
+            <img src="${displayImg}" alt="${nameFa}" onerror="this.src='https://via.placeholder.com/150?text=No+Image'">
             <div class="bird-card-info">
                 <h3>${nameFa}</h3>
                 <p>${sciName}</p>
@@ -40,12 +62,14 @@ function renderBirdList(birds) {
 
 // 3. Search
 document.getElementById('search-input').addEventListener('input', (e) => {
-    const term = e.target.value.trim();
+    const term = e.target.value.trim().toLowerCase();
     if (!term) return renderBirdList(birdsData);
+    
     const filtered = birdsData.filter(b => {
-        const name = (b.nameFa || b['nameFa ']).trim();
-        const sci = (b.scientificName || b['scientificName ']).trim();
-        return name.includes(term) || sci.toLowerCase().includes(term.toLowerCase());
+        if (!b) return false;
+        const name = String(b.nameFa || b['nameFa '] || '').toLowerCase();
+        const sci = String(b.scientificName || b['scientificName '] || '').toLowerCase();
+        return name.includes(term) || sci.includes(term);
     });
     renderBirdList(filtered);
 });
@@ -53,13 +77,33 @@ document.getElementById('search-input').addEventListener('input', (e) => {
 // 4. Bird Detail
 async function openBirdDetail(birdId) {
     currentBirdId = birdId;
-    const bird = birdsData.find(b => (b.id || b['id ']).trim() === birdId);
-    if (!bird) return;
+    
+    const bird = birdsData.find(b => {
+        const bId = String(b.id || b['id '] || '').trim();
+        return bId === birdId;
+    });
+    
+    if (!bird) {
+        console.error("Bird not found:", birdId);
+        return;
+    }
 
-    document.getElementById('modal-img').src = (bird.imageUrl || bird['imageUrl ']).trim();
-    document.getElementById('modal-name').textContent = (bird.nameFa || bird['nameFa ']).trim();
-    document.getElementById('modal-sci-name').textContent = (bird.scientificName || bird['scientificName ']).trim();
-    document.getElementById('modal-desc').textContent = (bird.description || bird['description ']).trim();
+    const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
+    const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
+    const imgUrl = String(bird.imageUrl || bird['imageUrl '] || '').trim();
+    const description = String(bird.description || bird['description '] || 'توضیحاتی موجود نیست.').trim();
+    const wikiUrl = String(bird.wikiUrl || bird['wikiUrl '] || '#').trim();
+
+    document.getElementById('modal-img').src = imgUrl || 'https://via.placeholder.com/300?text=No+Image';
+    document.getElementById('modal-name').textContent = nameFa;
+    document.getElementById('modal-sci-name').textContent = sciName;
+    
+    // نمایش توضیحات و لینک ویکی‌پدیا
+    const descDiv = document.getElementById('modal-desc');
+    descDiv.textContent = description;
+    if (wikiUrl && wikiUrl !== '#') {
+        descDiv.innerHTML += `<br><br><a href="${wikiUrl}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:bold;">🔗 مطالعه بیشتر در ویکی‌پدیا</a>`;
+    }
     
     openModal('bird-modal');
     await renderSightingHistory(birdId);
@@ -68,12 +112,12 @@ async function openBirdDetail(birdId) {
 // 5. Sighting History
 async function renderSightingHistory(birdId) {
     const historyDiv = document.getElementById('sighting-history');
-    historyDiv.innerHTML = '<p>در حال بارگذاری...</p>';
+    historyDiv.innerHTML = '<p style="text-align:center;">در حال بارگذاری...</p>';
     
     const sightings = await localforage.getItem(`sightings_${birdId}`) || [];
     
     if (sightings.length === 0) {
-        historyDiv.innerHTML = '<p style="color:#888; text-align:center;">هنوز مشاهده‌ای ثبت نکرده‌اید.</p>';
+        historyDiv.innerHTML = '<p style="color:#888; text-align:center;">هنوز مشاهده‌ای برای این پرنده ثبت نکرده‌اید.</p>';
         return;
     }
 
@@ -90,7 +134,7 @@ async function renderSightingHistory(birdId) {
         }
 
         item.innerHTML = `
-            <div class="date">${sighting.date}</div>
+            <div class="date">📅 ${sighting.date}</div>
             <div class="notes">${sighting.notes || 'بدون توضیحات'}</div>
             ${photosHtml}
         `;
@@ -132,7 +176,7 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     sightings.push({
         date: date,
         notes: notes,
-        photos: [...pendingPhotos] // Save compressed base64 images
+        photos: [...pendingPhotos]
     });
     
     await localforage.setItem(`sightings_${currentBirdId}`, sightings);
@@ -143,7 +187,7 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     alert('مشاهده شما با موفقیت ذخیره شد! (آفلاین)');
 };
 
-// 7. Image Compression (Crucial for mobile storage)
+// 7. Image Compression (فشرده‌سازی تصاویر برای ذخیره آفلاین)
 function compressImage(file, maxWidth = 800, quality = 0.7) {
     return new Promise((resolve) => {
         const reader = new FileReader();
