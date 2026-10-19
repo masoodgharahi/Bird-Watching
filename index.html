@@ -11,7 +11,10 @@
 </head>
 <body>
     <header>
-        <h1>🦅 پرندگان ایران</h1>
+        <div class="header-top">
+            <h1>🦅 پرندگان ایران</h1>
+            <button id="all-sightings-btn" class="icon-btn" title="مشاهدات من">📋</button>
+        </div>
         <input type="text" id="search-input" placeholder="جستجوی پرنده...">
     </header>
 
@@ -35,11 +38,11 @@
         </div>
     </div>
 
-    <!-- Log Sighting Modal -->
+    <!-- Log/Edit Sighting Modal -->
     <div id="log-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal('log-modal')">&times;</span>
-            <h2>ثبت مشاهده</h2>
+            <h2 id="log-modal-title">ثبت مشاهده</h2>
             <form id="sighting-form">
                 <label>تاریخ (اختیاری):</label>
                 <input type="date" id="sighting-date">
@@ -51,8 +54,17 @@
                 <input type="file" id="sighting-photo" accept="image/*" multiple>
                 <div id="photo-preview"></div>
                 
-                <button type="submit" class="primary-btn">ذخیره مشاهده (آفلاین)</button>
+                <button type="submit" class="primary-btn" id="submit-btn">ذخیره مشاهده (آفلاین)</button>
             </form>
+        </div>
+    </div>
+
+    <!-- All Sightings Modal -->
+    <div id="all-sightings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('all-sightings-modal')">&times;</span>
+            <h2>📋 همه مشاهدات من</h2>
+            <div id="all-sightings-list"></div>
         </div>
     </div>
 
