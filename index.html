@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>پرندگان ایران</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c5e3b">
+    <!-- LocalForage for offline database storage -->
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>🦅 پرندگان ایران</h1>
+        <input type="text" id="search-input" placeholder="جستجوی پرنده...">
+    </header>
+
+    <main id="bird-list-container">
+        <div id="bird-list"></div>
+    </main>
+
+    <!-- Bird Detail Modal -->
+    <div id="bird-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('bird-modal')">&times;</span>
+            <img id="modal-img" src="" alt="">
+            <h2 id="modal-name"></h2>
+            <p id="modal-sci-name" class="sci-name"></p>
+            <div id="modal-desc" class="description"></div>
+            
+            <button id="log-sighting-btn" class="primary-btn">ثبت مشاهده جدید 📝</button>
+            
+            <h3>مشاهدات قبلی من</h3>
+            <div id="sighting-history"></div>
+        </div>
+    </div>
+
+    <!-- Log Sighting Modal -->
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('log-modal')">&times;</span>
+            <h2>ثبت مشاهده</h2>
+            <form id="sighting-form">
+                <label>تاریخ:</label>
+                <input type="date" id="sighting-date" required>
+                
+                <label>توضیحات:</label>
+                <textarea id="sighting-notes" placeholder="مثلاً: در حال خوردن دانه روی درخت بلوط..."></textarea>
+                
+                <label>افزودن عکس (از گالری یا دوربین):</label>
+                <input type="file" id="sighting-photo" accept="image/*" capture="environment">
+                <div id="photo-preview"></div>
+                
+                <button type="submit" class="primary-btn">ذخیره مشاهده (آفلاین)</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Register Service Worker for offline support
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
