@@ -1,25 +1,18 @@
 let birdsData = [];
 let currentBirdId = null;
 
-// 1. Load Data (ضدخطا و هوشمند)
+// 1. Load Data
 async function init() {
     try {
-        // ابتدا سعی می‌کند فایل تمیز شده را بخواند، اگر نبود فایل اصلی را می‌خواند
         let res = await fetch('birds_clean.json');
         if (!res.ok) {
             res = await fetch('birds.json');
         }
         
-        if (!res.ok) {
-            throw new Error("File not found");
-        }
+        if (!res.ok) throw new Error("File not found");
 
         birdsData = await res.json();
-        
-        // اطمینان از اینکه داده‌ها به صورت آرایه هستند
-        if (!Array.isArray(birdsData)) {
-            throw new Error("Data is not an array");
-        }
+        if (!Array.isArray(birdsData)) throw new Error("Data is not an array");
 
         renderBirdList(birdsData);
     } catch (err) {
@@ -29,15 +22,14 @@ async function init() {
     }
 }
 
-// 2. Render List (کاملاً ایمن در برابر داده‌های ناقص)
+// 2. Render List
 function renderBirdList(birds) {
     const list = document.getElementById('bird-list');
     list.innerHTML = '';
     
     birds.forEach(bird => {
-        if (!bird) return; // رد کردن آیتم‌های خالی یا نامعتبر
+        if (!bird) return;
         
-        // استخراج ایمن داده‌ها (اگر وجود نداشت، رشته خالی برمی‌گرداند تا خطای trim رخ ندهد)
         const id = String(bird.id || bird['id '] || '').trim();
         const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
         const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
@@ -83,10 +75,7 @@ async function openBirdDetail(birdId) {
         return bId === birdId;
     });
     
-    if (!bird) {
-        console.error("Bird not found:", birdId);
-        return;
-    }
+    if (!bird) return;
 
     const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
     const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
@@ -98,7 +87,6 @@ async function openBirdDetail(birdId) {
     document.getElementById('modal-name').textContent = nameFa;
     document.getElementById('modal-sci-name').textContent = sciName;
     
-    // نمایش توضیحات و لینک ویکی‌پدیا
     const descDiv = document.getElementById('modal-desc');
     descDiv.textContent = description;
     if (wikiUrl && wikiUrl !== '#') {
@@ -165,11 +153,17 @@ document.getElementById('sighting-photo').addEventListener('change', async (e) =
     }
 });
 
+// ✅ اصلاح: تاریخ اجباری حذف شد و تاریخ پیش‌فرض تنظیم می‌شود
 document.getElementById('sighting-form').onsubmit = async (e) => {
     e.preventDefault();
     if (!currentBirdId) return;
 
-    const date = document.getElementById('sighting-date').value;
+    let date = document.getElementById('sighting-date').value;
+    if (!date) {
+        const today = new Date();
+        date = today.toISOString().split('T')[0]; // فرمت YYYY-MM-DD
+    }
+    
     const notes = document.getElementById('sighting-notes').value;
     
     const sightings = await localforage.getItem(`sightings_${currentBirdId}`) || [];
@@ -187,7 +181,7 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     alert('مشاهده شما با موفقیت ذخیره شد! (آفلاین)');
 };
 
-// 7. Image Compression (فشرده‌سازی تصاویر برای ذخیره آفلاین)
+// 7. Image Compression
 function compressImage(file, maxWidth = 800, quality = 0.7) {
     return new Promise((resolve) => {
         const reader = new FileReader();
