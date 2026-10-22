@@ -1,24 +1,36 @@
 let birdsData = [];
+let customBirds = []; // پرندگان سفارشی که کاربر اضافه کرده
 let currentBirdId = null;
 let pendingPhotos = [];
-let editingSightingIndex = null; // برای حالت ویرایش
+let editingSightingIndex = null;
 
 // 1. Load Data
 async function init() {
     try {
+        // بارگذاری پرندگان اصلی
         let res = await fetch('birds_clean.json');
         if (!res.ok) res = await fetch('birds.json');
-        if (!res.ok) throw new Error("File not found");
+        if (res.ok) {
+            birdsData = await res.json();
+            if (!Array.isArray(birdsData)) birdsData = [];
+        } else {
+            birdsData = [];
+        }
 
-        birdsData = await res.json();
-        if (!Array.isArray(birdsData)) throw new Error("Data is not an array");
+        // بارگذاری پرندگان سفارشی
+        customBirds = await localforage.getItem('custom_birds') || [];
 
-        renderBirdList(birdsData);
+        renderBirdList(getAllBirds());
     } catch (err) {
-        console.error("Error loading birds data:", err);
+        console.error("Error loading data:", err);
         document.getElementById('bird-list').innerHTML = 
-            "<p style='padding:20px; text-align:center; color:red;'>خطا در بارگذاری فایل پرندگان.</p>";
+            "<p style='padding:20px; text-align:center; color:red;'>خطا در بارگذاری داده‌ها.</p>";
     }
+}
+
+// تابع کمکی: ترکیب پرندگان اصلی و سفارشی
+function getAllBirds() {
+    return [...birdsData, ...customBirds];
 }
 
 // 2. Render List
@@ -28,16 +40,18 @@ function renderBirdList(birds) {
     
     birds.forEach(bird => {
         if (!bird) return;
-        const id = String(bird.id || bird['id '] || '').trim();
-        const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
-        const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
-        const imgUrl = String(bird.imageUrl || bird['imageUrl '] || '').trim();
+        const id = String(bird.id || '').trim();
+        const nameFa = String(bird.nameFa || 'نامشخص').trim();
+        const sciName = String(bird.scientificName || '').trim();
+        const imgUrl = String(bird.imageUrl || '').trim();
+        const isCustom = bird.isCustom === true;
 
         const card = document.createElement('div');
         card.className = 'bird-card';
         card.onclick = () => openBirdDetail(id);
         const displayImg = imgUrl || 'https://via.placeholder.com/150?text=No+Image';
         card.innerHTML = `
+            ${isCustom ? '<span class="custom-badge">سفارشی</span>' : ''}
             <img src="${displayImg}" alt="${nameFa}" onerror="this.src='https://via.placeholder.com/150?text=No+Image'">
             <div class="bird-card-info">
                 <h3>${nameFa}</h3>
@@ -51,12 +65,14 @@ function renderBirdList(birds) {
 // 3. Search
 document.getElementById('search-input').addEventListener('input', (e) => {
     const term = e.target.value.trim().toLowerCase();
-    if (!term) return renderBirdList(birdsData);
-    const filtered = birdsData.filter(b => {
+    const allBirds = getAllBirds();
+    if (!term) return renderBirdList(allBirds);
+    const filtered = allBirds.filter(b => {
         if (!b) return false;
-        const name = String(b.nameFa || b['nameFa '] || '').toLowerCase();
-        const sci = String(b.scientificName || b['scientificName '] || '').toLowerCase();
-        return name.includes(term) || sci.includes(term);
+        const name = String(b.nameFa || '').toLowerCase();
+        const sci = String(b.scientificName || '').toLowerCase();
+        const en = String(b.nameEn || '').toLowerCase();
+        return name.includes(term) || sci.includes(term) || en.includes(term);
     });
     renderBirdList(filtered);
 });
@@ -64,14 +80,15 @@ document.getElementById('search-input').addEventListener('input', (e) => {
 // 4. Bird Detail
 async function openBirdDetail(birdId) {
     currentBirdId = birdId;
-    const bird = birdsData.find(b => String(b.id || b['id '] || '').trim() === birdId);
+    const allBirds = getAllBirds();
+    const bird = allBirds.find(b => String(b.id || '').trim() === birdId);
     if (!bird) return;
 
-    const nameFa = String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim();
-    const sciName = String(bird.scientificName || bird['scientificName '] || '').trim();
-    const imgUrl = String(bird.imageUrl || bird['imageUrl '] || '').trim();
-    const description = String(bird.description || bird['description '] || 'توضیحاتی موجود نیست.').trim();
-    const wikiUrl = String(bird.wikiUrl || bird['wikiUrl '] || '#').trim();
+    const nameFa = String(bird.nameFa || 'نامشخص').trim();
+    const sciName = String(bird.scientificName || '').trim();
+    const imgUrl = String(bird.imageUrl || '').trim();
+    const description = String(bird.description || 'توضیحاتی موجود نیست.').trim();
+    const wikiUrl = String(bird.wikiUrl || '#').trim();
 
     document.getElementById('modal-img').src = imgUrl || 'https://via.placeholder.com/300?text=No+Image';
     document.getElementById('modal-name').textContent = nameFa;
@@ -79,7 +96,7 @@ async function openBirdDetail(birdId) {
     
     const descDiv = document.getElementById('modal-desc');
     descDiv.textContent = description;
-    if (wikiUrl && wikiUrl !== '#') {
+    if (wikiUrl && wikiUrl !== '#' && !bird.isCustom) {
         descDiv.innerHTML += `<br><br><a href="${wikiUrl}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:bold;">🔗 مطالعه بیشتر در ویکی‌پدیا</a>`;
     }
     
@@ -87,7 +104,7 @@ async function openBirdDetail(birdId) {
     await renderSightingHistory(birdId);
 }
 
-// 5. Sighting History (با دکمه‌های ویرایش و حذف)
+// 5. Sighting History
 async function renderSightingHistory(birdId) {
     const historyDiv = document.getElementById('sighting-history');
     historyDiv.innerHTML = '<p style="text-align:center;">در حال بارگذاری...</p>';
@@ -101,7 +118,6 @@ async function renderSightingHistory(birdId) {
 
     historyDiv.innerHTML = '';
     sightings.slice().reverse().forEach((sighting, reverseIdx) => {
-        // چون reverse کردیم، index واقعی = length - 1 - reverseIdx
         const realIndex = sightings.length - 1 - reverseIdx;
         const item = document.createElement('div');
         item.className = 'sighting-item';
@@ -125,7 +141,6 @@ async function renderSightingHistory(birdId) {
         historyDiv.appendChild(item);
     });
 
-    // اضافه کردن event listener به دکمه‌ها
     historyDiv.querySelectorAll('.btn-edit').forEach(btn => {
         btn.onclick = () => editSighting(birdId, parseInt(btn.dataset.index));
     });
@@ -134,27 +149,24 @@ async function renderSightingHistory(birdId) {
     });
 }
 
-// 6. حذف مشاهده
+// 6. Delete Sighting
 async function deleteSighting(birdId, index) {
     if (!confirm('آیا از حذف این مشاهده مطمئن هستید؟')) return;
-    
     const sightings = await localforage.getItem(`sightings_${birdId}`) || [];
     sightings.splice(index, 1);
     await localforage.setItem(`sightings_${birdId}`, sightings);
     await renderSightingHistory(birdId);
 }
 
-// 7. ویرایش مشاهده
+// 7. Edit Sighting
 async function editSighting(birdId, index) {
     const sightings = await localforage.getItem(`sightings_${birdId}`) || [];
     const sighting = sightings[index];
     if (!sighting) return;
 
-    // باز کردن فرم با داده‌های از پیش پر شده
     document.getElementById('sighting-date').value = sighting.date || '';
     document.getElementById('sighting-notes').value = sighting.notes || '';
     
-    // نمایش عکس‌های قبلی در preview
     pendingPhotos = [...(sighting.photos || [])];
     const preview = document.getElementById('photo-preview');
     preview.innerHTML = '';
@@ -164,7 +176,6 @@ async function editSighting(birdId, index) {
         preview.appendChild(img);
     });
 
-    // تغییر عنوان و دکمه برای حالت ویرایش
     document.getElementById('log-modal-title').textContent = 'ویرایش مشاهده';
     document.getElementById('submit-btn').textContent = 'بروزرسانی مشاهده';
     editingSightingIndex = index;
@@ -172,7 +183,7 @@ async function editSighting(birdId, index) {
     openModal('log-modal');
 }
 
-// 8. باز کردن فرم ثبت جدید
+// 8. New Sighting Form
 document.getElementById('log-sighting-btn').onclick = () => {
     document.getElementById('sighting-date').valueAsDate = new Date();
     document.getElementById('sighting-notes').value = '';
@@ -184,7 +195,7 @@ document.getElementById('log-sighting-btn').onclick = () => {
     openModal('log-modal');
 };
 
-// 9. اضافه کردن عکس جدید (در کنار عکس‌های قبلی در حالت ویرایش)
+// 9. Photo Upload
 document.getElementById('sighting-photo').addEventListener('change', async (e) => {
     const files = e.target.files;
     const preview = document.getElementById('photo-preview');
@@ -196,19 +207,17 @@ document.getElementById('sighting-photo').addEventListener('change', async (e) =
         img.src = compressed;
         preview.appendChild(img);
     }
-    // پاک کردن input تا بتوان دوباره همان فایل را انتخاب کرد
     e.target.value = '';
 });
 
-// 10. Submit فرم (هم برای ثبت جدید و هم ویرایش)
+// 10. Submit Sighting
 document.getElementById('sighting-form').onsubmit = async (e) => {
     e.preventDefault();
     if (!currentBirdId) return;
 
     let date = document.getElementById('sighting-date').value;
     if (!date) {
-        const today = new Date();
-        date = today.toISOString().split('T')[0];
+        date = new Date().toISOString().split('T')[0];
     }
     const notes = document.getElementById('sighting-notes').value;
     
@@ -221,16 +230,12 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     };
 
     if (editingSightingIndex !== null) {
-        // حالت ویرایش
         sightings[editingSightingIndex] = sightingData;
     } else {
-        // حالت ثبت جدید
         sightings.push(sightingData);
     }
     
     await localforage.setItem(`sightings_${currentBirdId}`, sightings);
-    
-    // ریست کردن حالت
     pendingPhotos = [];
     editingSightingIndex = null;
     
@@ -239,22 +244,25 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     alert(editingSightingIndex !== null ? 'مشاهده بروزرسانی شد!' : 'مشاهده شما با موفقیت ذخیره شد!');
 };
 
-// 11. نمایش همه مشاهدات
+// 11. Show All Sightings with Stats
 document.getElementById('all-sightings-btn').onclick = showAllSightings;
 
 async function showAllSightings() {
     openModal('all-sightings-modal');
     const listDiv = document.getElementById('all-sightings-list');
+    const statsDiv = document.getElementById('sightings-stats');
     listDiv.innerHTML = '<p style="text-align:center;">در حال بارگذاری...</p>';
+    statsDiv.innerHTML = '';
 
-    // جمع‌آوری همه مشاهدات از همه پرندگان
     const allSightings = [];
     const keys = await localforage.keys();
+    const uniqueBirdIds = new Set();
     
     for (const key of keys) {
         if (!key.startsWith('sightings_')) continue;
         const birdId = key.replace('sightings_', '');
-        const bird = birdsData.find(b => String(b.id || b['id '] || '').trim() === birdId);
+        const allBirds = getAllBirds();
+        const bird = allBirds.find(b => String(b.id || '').trim() === birdId);
         if (!bird) continue;
         
         const sightings = await localforage.getItem(key) || [];
@@ -262,19 +270,33 @@ async function showAllSightings() {
             allSightings.push({
                 birdId: birdId,
                 index: idx,
-                birdName: String(bird.nameFa || bird['nameFa '] || 'نامشخص').trim(),
-                birdImage: String(bird.imageUrl || bird['imageUrl '] || '').trim(),
+                birdName: String(bird.nameFa || 'نامشخص').trim(),
+                birdImage: String(bird.imageUrl || '').trim(),
                 ...s
             });
+            uniqueBirdIds.add(birdId);
         });
     }
+
+    // نمایش آمار
+    const totalSightings = allSightings.length;
+    const uniqueSpecies = uniqueBirdIds.size;
+    statsDiv.innerHTML = `
+        <div class="stat-item">
+            <span class="number">${totalSightings}</span>
+            <span class="label">کل مشاهدات</span>
+        </div>
+        <div class="stat-item">
+            <span class="number">${uniqueSpecies}</span>
+            <span class="label">گونه‌های مشاهده‌شده</span>
+        </div>
+    `;
 
     if (allSightings.length === 0) {
         listDiv.innerHTML = '<p class="empty-state">هنوز هیچ مشاهده‌ای ثبت نکرده‌اید.<br>برای شروع، روی یک پرنده کلیک کنید و "ثبت مشاهده" را بزنید.</p>';
         return;
     }
 
-    // مرتب‌سازی بر اساس تاریخ (جدیدترین در بالا)
     allSightings.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     listDiv.innerHTML = '';
@@ -306,7 +328,6 @@ async function showAllSightings() {
         listDiv.appendChild(card);
     });
 
-    // event listener برای دکمه حذف
     listDiv.querySelectorAll('.btn-delete').forEach(btn => {
         btn.onclick = async () => {
             if (!confirm('آیا از حذف این مشاهده مطمئن هستید؟')) return;
@@ -315,13 +336,129 @@ async function showAllSightings() {
             const sightings = await localforage.getItem(`sightings_${birdId}`) || [];
             sightings.splice(index, 1);
             await localforage.setItem(`sightings_${birdId}`, sightings);
-            // رفرش کردن لیست
             showAllSightings();
         };
     });
 }
 
-// 12. Image Compression
+// 12. Add New Bird
+document.getElementById('add-bird-btn').onclick = () => {
+    document.getElementById('add-bird-form').reset();
+    document.getElementById('new-bird-photo-preview').innerHTML = '';
+    openModal('add-bird-modal');
+};
+
+let newBirdPhoto = null;
+document.getElementById('new-bird-photo').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const preview = document.getElementById('new-bird-photo-preview');
+    preview.innerHTML = '';
+    newBirdPhoto = await compressImage(file);
+    const img = document.createElement('img');
+    img.src = newBirdPhoto;
+    preview.appendChild(img);
+});
+
+document.getElementById('add-bird-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const nameFa = document.getElementById('new-bird-name-fa').value.trim();
+    if (!nameFa) return;
+
+    const newBird = {
+        id: 'custom_' + Date.now(),
+        nameFa: nameFa,
+        nameEn: document.getElementById('new-bird-name-en').value.trim(),
+        scientificName: document.getElementById('new-bird-sci-name').value.trim(),
+        description: document.getElementById('new-bird-desc').value.trim(),
+        imageUrl: newBirdPhoto || '',
+        isCustom: true
+    };
+
+    customBirds.push(newBird);
+    await localforage.setItem('custom_birds', customBirds);
+    newBirdPhoto = null;
+    
+    closeModal('add-bird-modal');
+    renderBirdList(getAllBirds());
+    alert('پرنده جدید با موفقیت اضافه شد!');
+};
+
+// 13. Export Backup
+document.getElementById('export-btn').onclick = async () => {
+    const backup = {
+        version: 1,
+        exportDate: new Date().toISOString(),
+        customBirds: customBirds,
+        sightings: {}
+    };
+
+    const keys = await localforage.keys();
+    for (const key of keys) {
+        if (key.startsWith('sightings_')) {
+            backup.sightings[key] = await localforage.getItem(key);
+        }
+    }
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `birds-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('فایل پشتیبان با موفقیت دانلود شد!');
+};
+
+// 14. Import Backup
+document.getElementById('import-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm('هشدار: بازیابی پشتیبان، همه داده‌های فعلی (مشاهدات و پرندگان سفارشی) را با داده‌های فایل جایگزین می‌کند. آیا مطمئن هستید؟')) {
+        e.target.value = '';
+        return;
+    }
+
+    try {
+        const text = await file.text();
+        const backup = JSON.parse(text);
+
+        if (!backup.sightings || !backup.customBirds) {
+            alert('فایل پشتیبان نامعتبر است.');
+            return;
+        }
+
+        // پاک کردن داده‌های قدیمی
+        const keys = await localforage.keys();
+        for (const key of keys) {
+            if (key.startsWith('sightings_') || key === 'custom_birds') {
+                await localforage.removeItem(key);
+            }
+        }
+
+        // بازیابی پرندگان سفارشی
+        customBirds = backup.customBirds || [];
+        await localforage.setItem('custom_birds', customBirds);
+
+        // بازیابی مشاهدات
+        for (const [key, value] of Object.entries(backup.sightings)) {
+            await localforage.setItem(key, value);
+        }
+
+        renderBirdList(getAllBirds());
+        alert('پشتیبان با موفقیت بازیابی شد!');
+        showAllSightings(); // رفرش لیست
+    } catch (err) {
+        console.error(err);
+        alert('خطا در بازیابی فایل پشتیبان. لطفاً فایل معتبر انتخاب کنید.');
+    }
+    e.target.value = '';
+});
+
+// 15. Image Compression
 function compressImage(file, maxWidth = 800, quality = 0.7) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -347,7 +484,7 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
     });
 }
 
-// 13. Modal Helpers
+// 16. Modal Helpers
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 window.onclick = function(event) {
