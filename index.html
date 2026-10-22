@@ -13,7 +13,10 @@
     <header>
         <div class="header-top">
             <h1>🦅 پرندگان ایران</h1>
-            <button id="all-sightings-btn" class="icon-btn" title="مشاهدات من">📋</button>
+            <div class="header-buttons">
+                <button id="add-bird-btn" class="icon-btn" title="افزودن پرنده جدید">➕</button>
+                <button id="all-sightings-btn" class="icon-btn" title="مشاهدات من">📋</button>
+            </div>
         </div>
         <input type="text" id="search-input" placeholder="جستجوی پرنده...">
     </header>
@@ -59,11 +62,50 @@
         </div>
     </div>
 
+    <!-- Add New Bird Modal -->
+    <div id="add-bird-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('add-bird-modal')">&times;</span>
+            <h2>➕ افزودن پرنده جدید</h2>
+            <p style="color:#666; font-size:0.85rem; margin-bottom:15px;">اگر پرنده‌ای که مشاهده کرده‌اید در لیست نیست، می‌توانید آن را اضافه کنید.</p>
+            <form id="add-bird-form">
+                <label>نام فارسی: *</label>
+                <input type="text" id="new-bird-name-fa" required placeholder="مثلاً: چکاوک شاخدار">
+                
+                <label>نام انگلیسی:</label>
+                <input type="text" id="new-bird-name-en" placeholder="مثلاً: Horned Lark">
+                
+                <label>نام علمی:</label>
+                <input type="text" id="new-bird-sci-name" placeholder="مثلاً: Eremophila alpestris">
+                
+                <label>توضیحات:</label>
+                <textarea id="new-bird-desc" placeholder="توضیحاتی درباره این پرنده..."></textarea>
+                
+                <label>عکس پرنده (اختیاری):</label>
+                <input type="file" id="new-bird-photo" accept="image/*">
+                <div id="new-bird-photo-preview"></div>
+                
+                <button type="submit" class="primary-btn">ذخیره پرنده جدید</button>
+            </form>
+        </div>
+    </div>
+
     <!-- All Sightings Modal -->
     <div id="all-sightings-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal('all-sightings-modal')">&times;</span>
             <h2>📋 همه مشاهدات من</h2>
+            
+            <div id="sightings-stats" class="stats-box"></div>
+            
+            <div class="backup-buttons">
+                <button id="export-btn" class="secondary-btn">📥 دریافت پشتیبان (Export)</button>
+                <label class="secondary-btn import-label">
+                    📤 بازیابی پشتیبان (Import)
+                    <input type="file" id="import-file" accept=".json" style="display:none;">
+                </label>
+            </div>
+            
             <div id="all-sightings-list"></div>
         </div>
     </div>
