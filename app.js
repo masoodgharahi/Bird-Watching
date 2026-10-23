@@ -1,13 +1,19 @@
 let birdsData = [];
-let customBirds = []; // پرندگان سفارشی که کاربر اضافه کرده
+let customBirds = [];
 let currentBirdId = null;
 let pendingPhotos = [];
 let editingSightingIndex = null;
 
+// متغیرهای کراپ
+let cropper = null;
+let cropSuccessCallback = null;
+let cropCancelCallback = null;
+let cropQueue = [];
+let cropTargetInput = null;
+
 // 1. Load Data
 async function init() {
     try {
-        // بارگذاری پرندگان اصلی
         let res = await fetch('birds_clean.json');
         if (!res.ok) res = await fetch('birds.json');
         if (res.ok) {
@@ -17,9 +23,7 @@ async function init() {
             birdsData = [];
         }
 
-        // بارگذاری پرندگان سفارشی
         customBirds = await localforage.getItem('custom_birds') || [];
-
         renderBirdList(getAllBirds());
     } catch (err) {
         console.error("Error loading data:", err);
@@ -28,7 +32,6 @@ async function init() {
     }
 }
 
-// تابع کمکی: ترکیب پرندگان اصلی و سفارشی
 function getAllBirds() {
     return [...birdsData, ...customBirds];
 }
@@ -195,22 +198,168 @@ document.getElementById('log-sighting-btn').onclick = () => {
     openModal('log-modal');
 };
 
-// 9. Photo Upload
-document.getElementById('sighting-photo').addEventListener('change', async (e) => {
-    const files = e.target.files;
-    const preview = document.getElementById('photo-preview');
+// ✂️ 9. Photo Upload with Crop (Sighting)
+document.getElementById('sighting-photo').addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
     
-    for (let file of files) {
-        const compressed = await compressImage(file);
-        pendingPhotos.push(compressed);
+    cropTargetInput = e.target;
+    cropQueue = [...files];
+    processCropQueue((croppedDataUrl) => {
+        pendingPhotos.push(croppedDataUrl);
         const img = document.createElement('img');
-        img.src = compressed;
-        preview.appendChild(img);
-    }
-    e.target.value = '';
+        img.src = croppedDataUrl;
+        document.getElementById('photo-preview').appendChild(img);
+    });
 });
 
-// 10. Submit Sighting
+// ✂️ 10. Photo Upload with Crop (New Bird)
+let newBirdPhoto = null;
+document.getElementById('new-bird-photo').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    cropTargetInput = e.target;
+    cropQueue = [file];
+    processCropQueue((croppedDataUrl) => {
+        newBirdPhoto = croppedDataUrl;
+        const preview = document.getElementById('new-bird-photo-preview');
+        preview.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = croppedDataUrl;
+        preview.appendChild(img);
+    });
+});
+
+// ✂️ 11. Crop Queue Processor
+function processCropQueue(successCallback) {
+    if (cropQueue.length === 0) {
+        if (cropTargetInput) {
+            cropTargetInput.value = '';
+            cropTargetInput = null;
+        }
+        return;
+    }
+    
+    const file = cropQueue.shift();
+    cropSuccessCallback = successCallback;
+    cropCancelCallback = () => processCropQueue(successCallback);
+    
+    openCropModal(file);
+}
+
+// ✂️ 12. Open Crop Modal
+function openCropModal(file) {
+    const modal = document.getElementById('crop-modal');
+    const image = document.getElementById('crop-image');
+    
+    document.body.classList.add('crop-open');
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        image.src = e.target.result;
+        modal.classList.add('active');
+        
+        // مقداردهی اولیه Cropper
+        if (cropper) {
+            cropper.destroy();
+        }
+        
+        cropper = new Cropper(image, {
+            viewMode: 1,
+            dragMode: 'move',
+            autoCropArea: 0.85,
+            responsive: true,
+            restore: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+            background: false,
+        });
+        
+        // reset نسبت به "آزاد"
+        setAspectRatio('free');
+    };
+    reader.readAsDataURL(file);
+}
+
+// ✂️ 13. Confirm Crop
+function confirmCrop() {
+    if (!cropper || !cropSuccessCallback) return;
+    
+    const canvas = cropper.getCroppedCanvas({
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageSmoothingQuality: 'high',
+    });
+    
+    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const callback = cropSuccessCallback;
+    
+    closeCropModal();
+    callback(croppedDataUrl);
+}
+
+// ✂️ 14. Cancel Crop
+function cancelCrop() {
+    closeCropModal();
+    if (cropCancelCallback) {
+        cropCancelCallback();
+    }
+}
+
+// ✂️ 15. Close Crop Modal
+function closeCropModal() {
+    const modal = document.getElementById('crop-modal');
+    modal.classList.remove('active');
+    document.body.classList.remove('crop-open');
+    
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+    document.getElementById('crop-image').src = '';
+    cropSuccessCallback = null;
+    cropCancelCallback = null;
+}
+
+// ✂️ 16. Crop Tools
+function rotateCrop(degrees) {
+    if (cropper) cropper.rotate(degrees);
+}
+
+function flipCrop(direction) {
+    if (!cropper) return;
+    const data = cropper.getData();
+    if (direction === 'x') {
+        cropper.scaleX(data.scaleX === -1 ? 1 : -1);
+    } else {
+        cropper.scaleY(data.scaleY === -1 ? 1 : -1);
+    }
+}
+
+function resetCrop() {
+    if (cropper) cropper.reset();
+    setAspectRatio('free');
+}
+
+function setAspectRatio(ratio) {
+    if (!cropper) return;
+    if (ratio === 'free') {
+        cropper.setAspectRatio(NaN);
+    } else {
+        const [w, h] = ratio.split(':').map(Number);
+        cropper.setAspectRatio(w / h);
+    }
+    document.querySelectorAll('.ratio-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.ratio === String(ratio));
+    });
+}
+
+// 17. Submit Sighting
 document.getElementById('sighting-form').onsubmit = async (e) => {
     e.preventDefault();
     if (!currentBirdId) return;
@@ -244,7 +393,7 @@ document.getElementById('sighting-form').onsubmit = async (e) => {
     alert(editingSightingIndex !== null ? 'مشاهده بروزرسانی شد!' : 'مشاهده شما با موفقیت ذخیره شد!');
 };
 
-// 11. Show All Sightings with Stats
+// 18. Show All Sightings
 document.getElementById('all-sightings-btn').onclick = showAllSightings;
 
 async function showAllSightings() {
@@ -278,7 +427,6 @@ async function showAllSightings() {
         });
     }
 
-    // نمایش آمار
     const totalSightings = allSightings.length;
     const uniqueSpecies = uniqueBirdIds.size;
     statsDiv.innerHTML = `
@@ -341,24 +489,13 @@ async function showAllSightings() {
     });
 }
 
-// 12. Add New Bird
+// 19. Add New Bird
 document.getElementById('add-bird-btn').onclick = () => {
     document.getElementById('add-bird-form').reset();
     document.getElementById('new-bird-photo-preview').innerHTML = '';
+    newBirdPhoto = null;
     openModal('add-bird-modal');
 };
-
-let newBirdPhoto = null;
-document.getElementById('new-bird-photo').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const preview = document.getElementById('new-bird-photo-preview');
-    preview.innerHTML = '';
-    newBirdPhoto = await compressImage(file);
-    const img = document.createElement('img');
-    img.src = newBirdPhoto;
-    preview.appendChild(img);
-});
 
 document.getElementById('add-bird-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -384,7 +521,7 @@ document.getElementById('add-bird-form').onsubmit = async (e) => {
     alert('پرنده جدید با موفقیت اضافه شد!');
 };
 
-// 13. Export Backup
+// 20. Export Backup
 document.getElementById('export-btn').onclick = async () => {
     const backup = {
         version: 1,
@@ -412,12 +549,12 @@ document.getElementById('export-btn').onclick = async () => {
     alert('فایل پشتیبان با موفقیت دانلود شد!');
 };
 
-// 14. Import Backup
+// 21. Import Backup
 document.getElementById('import-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm('هشدار: بازیابی پشتیبان، همه داده‌های فعلی (مشاهدات و پرندگان سفارشی) را با داده‌های فایل جایگزین می‌کند. آیا مطمئن هستید؟')) {
+    if (!confirm('هشدار: بازیابی پشتیبان، همه داده‌های فعلی را جایگزین می‌کند. آیا مطمئن هستید؟')) {
         e.target.value = '';
         return;
     }
@@ -431,7 +568,6 @@ document.getElementById('import-file').addEventListener('change', async (e) => {
             return;
         }
 
-        // پاک کردن داده‌های قدیمی
         const keys = await localforage.keys();
         for (const key of keys) {
             if (key.startsWith('sightings_') || key === 'custom_birds') {
@@ -439,56 +575,33 @@ document.getElementById('import-file').addEventListener('change', async (e) => {
             }
         }
 
-        // بازیابی پرندگان سفارشی
         customBirds = backup.customBirds || [];
         await localforage.setItem('custom_birds', customBirds);
 
-        // بازیابی مشاهدات
         for (const [key, value] of Object.entries(backup.sightings)) {
             await localforage.setItem(key, value);
         }
 
         renderBirdList(getAllBirds());
         alert('پشتیبان با موفقیت بازیابی شد!');
-        showAllSightings(); // رفرش لیست
+        showAllSightings();
     } catch (err) {
         console.error(err);
-        alert('خطا در بازیابی فایل پشتیبان. لطفاً فایل معتبر انتخاب کنید.');
+        alert('خطا در بازیابی فایل پشتیبان.');
     }
     e.target.value = '';
 });
 
-// 15. Image Compression
-function compressImage(file, maxWidth = 800, quality = 0.7) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                if (width > maxWidth) {
-                    height = (height * maxWidth) / width;
-                    width = maxWidth;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', quality));
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-// 16. Modal Helpers
+// 22. Modal Helpers
 function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function closeModal(id) { 
+    const modal = document.getElementById(id);
+    if (id !== 'crop-modal') { // جلوگیری از بستن تصادفی crop modal
+        modal.classList.remove('active'); 
+    }
+}
 window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) {
+    if (event.target.classList.contains('modal') && !event.target.classList.contains('crop-modal')) {
         event.target.classList.remove('active');
     }
 }
