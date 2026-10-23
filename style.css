@@ -84,3 +84,122 @@ form textarea { height: 80px; resize: vertical; }
 .all-sighting-card .sighting-actions { margin-top: 8px; }
 
 .empty-state { text-align: center; color: #888; padding: 30px 10px; }
+
+/* ✂️ Crop Modal Styles */
+.crop-modal { z-index: 300; }
+.crop-modal .modal-content {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    padding: 0;
+    background: #000;
+}
+
+.crop-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh; /* برای موبایل که keyboard باز می‌شود */
+    background: #000;
+}
+
+.crop-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: var(--primary);
+    color: white;
+    flex-shrink: 0;
+}
+
+.crop-cancel-btn, .crop-confirm-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.crop-confirm-btn {
+    background: #27ae60;
+    font-weight: bold;
+}
+
+.crop-cancel-btn:active, .crop-confirm-btn:active {
+    opacity: 0.7;
+}
+
+.crop-title {
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.crop-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    min-height: 0;
+}
+
+#crop-image {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.crop-footer {
+    background: #1a1a1a;
+    padding: 10px;
+    flex-shrink: 0;
+}
+
+.crop-tools, .crop-ratios {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.crop-tools {
+    margin-bottom: 10px;
+}
+
+.crop-tools button, .ratio-btn {
+    background: #333;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: inherit;
+    min-width: 44px;
+}
+
+.crop-tools button {
+    font-size: 1.2rem;
+    padding: 8px 14px;
+}
+
+.ratio-btn.active {
+    background: var(--primary);
+    font-weight: bold;
+}
+
+.crop-tools button:active, .ratio-btn:active {
+    opacity: 0.7;
+}
+
+/* جلوگیری از اسکرول body وقتی modal باز است */
+body.crop-open {
+    overflow: hidden;
+}
