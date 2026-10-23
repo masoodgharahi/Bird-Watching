@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2c5e3b">
+    
+    <!-- Cropper.js CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
 </head>
 <body>
@@ -107,6 +112,36 @@
             </div>
             
             <div id="all-sightings-list"></div>
+        </div>
+    </div>
+
+    <!-- ✂️ Crop Modal -->
+    <div id="crop-modal" class="modal crop-modal">
+        <div class="crop-container">
+            <div class="crop-header">
+                <button type="button" class="crop-cancel-btn" onclick="cancelCrop()">✕ انصراف</button>
+                <span class="crop-title">برش تصویر</span>
+                <button type="button" class="crop-confirm-btn" onclick="confirmCrop()">✓ تأیید</button>
+            </div>
+            <div class="crop-body">
+                <img id="crop-image" src="" alt="">
+            </div>
+            <div class="crop-footer">
+                <div class="crop-tools">
+                    <button type="button" onclick="rotateCrop(-90)" title="چرخش چپ">↺</button>
+                    <button type="button" onclick="rotateCrop(90)" title="چرخش راست">↻</button>
+                    <button type="button" onclick="flipCrop('x')" title="آینه افقی">⇔</button>
+                    <button type="button" onclick="flipCrop('y')" title="آینه عمودی">⇕</button>
+                    <button type="button" onclick="resetCrop()" title="بازنشانی">⟲</button>
+                </div>
+                <div class="crop-ratios">
+                    <button type="button" class="ratio-btn active" data-ratio="free" onclick="setAspectRatio('free')">آزاد</button>
+                    <button type="button" class="ratio-btn" data-ratio="1:1" onclick="setAspectRatio('1:1')">1:1</button>
+                    <button type="button" class="ratio-btn" data-ratio="4:3" onclick="setAspectRatio('4:3')">4:3</button>
+                    <button type="button" class="ratio-btn" data-ratio="16:9" onclick="setAspectRatio('16:9')">16:9</button>
+                    <button type="button" class="ratio-btn" data-ratio="3:4" onclick="setAspectRatio('3:4')">3:4</button>
+                </div>
+            </div>
         </div>
     </div>
 
